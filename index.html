@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <!-- import bootstrap and datatables.js -->
+    <link rel="stylesheet" href="./css/bootstrap.min.css">
+    <link rel="stylesheet" href="./css/datatables.min.css">
+</head>
+<body class="bg-custom">
+    <style>
+        /* Custom class for left-rounded button */
+        .btn-left-rounded {
+            border-top-left-radius: 0.25rem !important;
+            border-bottom-left-radius: 0.25rem !important;
+        }
+
+        /* Custom class for right-rounded button */
+        .btn-right-rounded {
+            border-top-right-radius: 0.25rem !important;
+            border-bottom-right-radius: 0.25rem !important;
+        }
+        .bg-custom {
+            background-color: #eeeef4;
+        }
+    </style>
+
+    <div class="col-12 d-flex align-items-center vh-100">
+        <div id="divHome" class="card col-12 col-md-10 col-lg-10 offset-md-1 offset-lg-1 shadow">
+            <div class="card-header">
+                <h1>Inventory Management System</h1>
+            </div>
+            <div class="card-body">
+                <table id="tblItems" class="table table-striped" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Quantity</th>
+                            <th>Location</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="item-list">
+                        <!-- Items will be added here -->
+                    </tbody>
+                </table>
+                <br>
+                <div class="row">
+                    <div class="col-auto">
+                        <button onclick="toggleAdd('divHome', 'divAdd')" class="btn btn-success">Add Item</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="divAdd" class="card col-12 col-md-10 col-lg-10 offset-md-1 offset-lg-1 shadow" style="display:none;">
+            <div class="card-header">
+                <h2>Add Item</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="item-name">Item Name</label>
+                    <input type="text" id="item-name" class="form-control mb-2" placeholder="Enter item name">
+                </div>
+                <div class="form-group">
+                    <label for="item-quantity">Item Quantity</label>
+                    <input type="number" id="item-quantity" min="0" class="form-control mb-2" placeholder="Enter item quantity">
+                </div>
+                <div class="form-group">
+                    <label for="item-location">Item Location</label>
+                    <input type="text" id="item-location" class="form-control mb-2" placeholder="Enter item location">
+                </div>
+                <div class="form-group">
+                    <button onclick="toggleAdd('divAdd', 'divHome')" class="btn btn-secondary">Return</button>
+                    <button onclick="addItem()" class="btn btn-success">Add</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/jquery-3.6.3.min.js"></script>
+    <script src="./js/bootstrap.min.js"></script>
+    <script src="./js/datatables.min.js"></script>
+    <script src="./js/sweetalert2.min.js"></script>
+    
+    <script>
+        function fetchItems() {
+            $.get('http://localhost:8080/items', function(res) {
+                const itemList = $('#item-list');
+                itemList.empty();
+                if(res.items){
+                    $.each(res.items, function(index, item){
+                        addItemToDOM(item.id, item.item, item.quantity, item.location);
+                    })
+                    initDatatable();
+                }
+            });
+        }
+    
+        function addItem() {
+            const name = $('#item-name').val().trim();
+            const quantity = parseInt($('#item-quantity').val().trim(), 10);
+            const location = $('#item-location').val().trim();
+    
+            if (name && !isNaN(quantity) && location) {
+                const newItem = { name, quantity, location };
+    
+                $.ajax({
+                    url: 'http://localhost:8080/items',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(newItem),
+                    success: function(addedItem) {
+                        addItemToDOM(addedItem.id, addedItem.name, addedItem.quantity, addedItem.location);
+                        $('#item-name').val('');
+                        $('#item-quantity').val('');
+                        $('#item-location').val('');
+                        toggleAdd('divAdd', 'divHome').then(() => initDatatable());
+                    },
+                    error: function() {
+                        Swal.fire('Error', 'Could not add item', 'error');
+                    }
+                });
+            } else {
+                Swal.fire('Error', 'Please fill out all fields correctly', 'error');
+            }
+        }
+    
+        function addItemToDOM(id, name, quantity, location) {
+            const itemList = $('#item-list');
+            
+            const row = $('<tr>').data('id', id);
+            
+            $('<td>').text(name).appendTo(row);
+            $('<td>').text(quantity).appendTo(row);
+            $('<td>').text(location).appendTo(row);
+            
+            const actionsCell = $('<td>');
+            
+            const editButton = $('<a>').addClass('btn btn-warning btn-sm mr-2').text('Edit');
+            editButton.on('click', () => editItem(id, row));
+            actionsCell.append(editButton);
+            
+            const deleteButton = $('<a>').addClass('btn btn-danger btn-sm').text('Delete');
+            deleteButton.on('click', () => deleteItem(id, row));
+            actionsCell.append(deleteButton);
+            
+            row.append(actionsCell);
+            itemList.append(row);
+        }
+    
+        function editItem(id, row) {
+            const nameCell = row.children().eq(0);
+            const quantityCell = row.children().eq(1);
+            const locationCell = row.children().eq(2);
+    
+            const currentName = nameCell.text();
+            const currentQuantity = quantityCell.text();
+            const currentLocation = locationCell.text();
+    
+            Swal.fire({
+                title: 'Edit item',
+                html:
+                    `<input id="swal-input-name" class="swal2-input" value="${currentName}">
+                     <input id="swal-input-quantity" class="swal2-input" value="${currentQuantity}" type="number">
+                     <input id="swal-input-location" class="swal2-input" value="${currentLocation}">`,
+                preConfirm: () => {
+                    return {
+                        name: $('#swal-input-name').val(),
+                        quantity: parseInt($('#swal-input-quantity').val(), 10),
+                        location: $('#swal-input-location').val()
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const updatedItem = result.value;
+    
+                    $.ajax({
+                        url: `http://localhost:8080/items/${id}`,
+                        method: 'PUT',
+                        contentType: 'application/json',
+                        data: JSON.stringify(updatedItem),
+                        success: function(updated) {
+                            nameCell.text(updated.name);
+                            quantityCell.text(updated.quantity);
+                            locationCell.text(updated.location);
+                            Swal.fire('Success', 'Item updated successfully!', 'success');
+                        },
+                        error: function() {
+                            Swal.fire('Error', 'Could not update item', 'error');
+                        }
+                    });
+                }
+            });
+        }
+    
+        function deleteItem(id, row) {
+            $.ajax({
+                url: `http://localhost:8080/items/${id}`,
+                method: 'DELETE',
+                success: function() {
+                    row.remove();
+                },
+                error: function() {
+                    Swal.fire('Error', 'Could not delete item', 'error');
+                }
+            });
+        }
+
+        function toggleAdd(card, cardTo) {
+            $(`#${card}`).slideToggle(function() {
+                $(`#${cardTo}`).slideToggle()
+            });
+        }
+
+        function initDatatable() {
+
+            if ($.fn.DataTable.isDataTable('#tblItems')) {
+                $('#tblItems').DataTable().destroy();
+            } else {            	
+                $.fn.dataTable.Buttons.defaults.dom.button.className = 'btn';
+            }
+
+            new DataTable('#tblItems', {
+                responsive: true,
+                columnDefs: [
+                    { orderable: false, targets: 3 },
+                    { targets: 1, className: 'dt-body-left dt-head-left' },
+                    { targets: 3, className: 'dt-body-right dt-head-left' }
+                ],
+                layout:{
+                    bottomEnd: 'pageLength',
+                    bottom2End: 'paging',
+                    topStart:{
+                        buttons: [
+                            {
+                                extend:'copy', 
+                                className:'btn btn-primary btn-left-rounded',
+                                exportOptions: {
+                                    columns: ":visible"
+                                },
+                            }, 
+                            {
+                                extend:'excel', 
+                                className:'btn btn-primary',
+                                exportOptions: {
+                                    columns: ":visible"
+                                },
+                            },
+                            {
+                                extend:'csv', 
+                                className:'btn btn-primary',
+                                exportOptions: {
+                                    columns: ":visible"
+                                },
+                            }, 
+                            {
+                                extend:'colvis', 
+                                className:'btn btn-primary btn-right-rounded',
+                            },
+                        ]
+                    }
+                }
+            });
+        }
+    
+        $(document).ready(function() {
+            fetchItems();
+        });
+    </script>
+
+</body>
+</html>
